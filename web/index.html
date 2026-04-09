@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Air Rifle Target</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: Arial, sans-serif; background: #1a1a2e; color: #eee; display: flex; flex-direction: column; align-items: center; padding: 20px; }
+    h1 { margin-bottom: 16px; font-size: 1.4rem; letter-spacing: 2px; text-transform: uppercase; color: #e2b96f; }
+    #target-wrap { position: relative; width: 320px; height: 320px; margin-bottom: 20px; }
+    #target-svg { width: 100%; height: 100%; }
+    #stats-bar { display: flex; gap: 24px; margin-bottom: 16px; font-size: 0.95rem; }
+    .stat { text-align: center; }
+    .stat span { display: block; font-size: 1.6rem; font-weight: bold; color: #e2b96f; }
+    #shot-table { width: 100%; max-width: 480px; border-collapse: collapse; font-size: 0.85rem; }
+    #shot-table th, #shot-table td { padding: 6px 10px; border-bottom: 1px solid #333; text-align: center; }
+    #shot-table th { background: #16213e; color: #e2b96f; text-transform: uppercase; letter-spacing: 1px; }
+    #shot-table tr:hover { background: #16213e55; }
+    #btn-reset { margin-top: 20px; padding: 10px 28px; background: #c0392b; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-size: 1rem; letter-spacing: 1px; }
+    #btn-reset:hover { background: #e74c3c; }
+    .dot { r: 4; fill: #e74c3c; stroke: #fff; stroke-width: 1; }
+  </style>
+</head>
+<body>
+  <h1>&#127919; Air Rifle Target</h1>
+
+  <div id="stats-bar">
+    <div class="stat">Shots<span id="st-shots">0</span></div>
+    <div class="stat">Total<span id="st-total">0</span></div>
+    <div class="stat">Avg<span id="st-avg">—</span></div>
+    <div class="stat">Group<span id="st-group">—</span></div>
+  </div>
+
+  <div id="target-wrap">
+    <svg id="target-svg" viewBox="-150 -150 300 300" xmlns="http://www.w3.org/2000/svg">
+      <!-- Background -->
+      <rect x="-150" y="-150" width="300" height="300" fill="#f5f0e8"/>
+      <!-- Scoring rings (outer→inner) -->
+      <circle cx="0" cy="0" r="100" fill="#f5f0e8" stroke="#222" stroke-width="1"/>
+      <circle cx="0" cy="0" r="87.5" fill="#f5f0e8" stroke="#222" stroke-width="1"/>
+      <circle cx="0" cy="0" r="77.5" fill="#f5f0e8" stroke="#222" stroke-width="1"/>
+      <circle cx="0" cy="0" r="67.5" fill="#f5f0e8" stroke="#222" stroke-width="1"/>
+      <circle cx="0" cy="0" r="57.5" fill="#f5f0e8" stroke="#222" stroke-width="1"/>
+      <circle cx="0" cy="0" r="47.5" fill="#f5f0e8" stroke="#222" stroke-width="1"/>
+      <circle cx="0" cy="0" r="37.5" fill="#f5f0e8" stroke="#222" stroke-width="1"/>
+      <circle cx="0" cy="0" r="27.5" fill="#f5f0e8" stroke="#222" stroke-width="1"/>
+      <circle cx="0" cy="0" r="17.5" fill="#f5f0e8" stroke="#222" stroke-width="1"/>
+      <!-- 10-ring (innermost) black -->
+      <circle cx="0" cy="0" r="7.5"  fill="#111" stroke="#333" stroke-width="0.5"/>
+      <!-- Crosshair -->
+      <line x1="-150" y1="0" x2="150" y2="0" stroke="#bbb" stroke-width="0.4"/>
+      <line x1="0" y1="-150" x2="0" y2="150" stroke="#bbb" stroke-width="0.4"/>
+      <!-- Ring labels -->
+      <text x="9"  y="-100" font-size="6" fill="#444">1</text>
+      <text x="9"  y="-87"  font-size="6" fill="#444">2</text>
+      <text x="9"  y="-77"  font-size="6" fill="#444">3</text>
+      <text x="9"  y="-67"  font-size="6" fill="#444">4</text>
+      <text x="9"  y="-57"  font-size="6" fill="#444">5</text>
+      <text x="9"  y="-47"  font-size="6" fill="#444">6</text>
+      <text x="9"  y="-37"  font-size="6" fill="#444">7</text>
+      <text x="9"  y="-27"  font-size="6" fill="#444">8</text>
+      <text x="9"  y="-17"  font-size="6" fill="#444">9</text>
+      <!-- Shot dots injected by JS -->
+      <g id="shot-dots"></g>
+    </svg>
+  </div>
+
+  <table id="shot-table">
+    <thead>
+      <tr><th>#</th><th>x (mm)</th><th>y (mm)</th><th>Ring</th><th>Total</th></tr>
+    </thead>
+    <tbody id="shot-tbody"></tbody>
+  </table>
+
+  <button id="btn-reset" onclick="resetSession()">Reset Session</button>
+
+  <script>
+    let knownShots = 0;
+
+    function refreshShots() {
+      fetch('/api/shots')
+        .then(r => r.json())
+        .then(shots => {
+          if (shots.length === knownShots) return;
+          knownShots = shots.length;
+
+          // Update shot dots on SVG
+          const dotsGroup = document.getElementById('shot-dots');
+          dotsGroup.innerHTML = '';
+          shots.forEach((s, idx) => {
+            const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+            circle.setAttribute('cx', s.x);
+            // SVG y-axis is inverted vs our coordinate system
+            circle.setAttribute('cy', -s.y);
+            circle.setAttribute('r', 4);
+            circle.setAttribute('fill', '#e74c3c');
+            circle.setAttribute('stroke', '#fff');
+            circle.setAttribute('stroke-width', 1);
+            circle.setAttribute('opacity', 0.85);
+            const title = document.createElementNS('http://www.w3.org/2000/svg', 'title');
+            title.textContent = `Shot ${s.shot}: ring ${s.ring}`;
+            circle.appendChild(title);
+            dotsGroup.appendChild(circle);
+          });
+
+          // Rebuild table (newest first)
+          const tbody = document.getElementById('shot-tbody');
+          tbody.innerHTML = '';
+          [...shots].reverse().forEach(s => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `<td>${s.shot}</td><td>${s.x.toFixed(1)}</td><td>${s.y.toFixed(1)}</td><td>${s.ring}</td><td>${s.total}</td>`;
+            tbody.appendChild(tr);
+          });
+        })
+        .catch(() => {});
+
+      fetch('/api/stats')
+        .then(r => r.json())
+        .then(st => {
+          document.getElementById('st-shots').textContent = st.shots;
+          document.getElementById('st-total').textContent = st.total;
+          document.getElementById('st-avg').textContent   = st.shots > 0 ? (st.total / st.shots).toFixed(1) : '—';
+          document.getElementById('st-group').textContent = st.shots > 1 ? st.groupRadius.toFixed(1) + ' mm' : '—';
+        })
+        .catch(() => {});
+    }
+
+    function resetSession() {
+      if (!confirm('Reset session? All shot data will be cleared.')) return;
+      fetch('/api/reset', { method: 'POST' })
+        .then(() => {
+          knownShots = 0;
+          document.getElementById('shot-dots').innerHTML = '';
+          document.getElementById('shot-tbody').innerHTML = '';
+          document.getElementById('st-shots').textContent = '0';
+          document.getElementById('st-total').textContent = '0';
+          document.getElementById('st-avg').textContent   = '—';
+          document.getElementById('st-group').textContent = '—';
+        })
+        .catch(() => {});
+    }
+
+    // Poll for new shots every 500 ms
+    refreshShots();
+    setInterval(refreshShots, 500);
+  </script>
+</body>
+</html>
